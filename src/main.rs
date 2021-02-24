@@ -1,4 +1,4 @@
-use serenity::{async_trait, builder::CreateEmbed, cache, framework, http::Http, model::Permissions};
+use serenity::{async_trait, builder::CreateEmbed, cache, framework::{self, standard::{Args, CommandError, Delimiter, macros::hook}}, http::Http, model::Permissions};
 use serenity::client::{Client, Context, EventHandler};
 use serenity::model::channel::Message;
 use serenity::framework::standard::{
@@ -9,10 +9,12 @@ use serenity::framework::standard::{
         group
     }
 };
+use log::{error, debug};
 
-use std::env;
+use std::{env};
 
 mod wowhead;
+// mod error;
 
 #[group]
 #[commands(item)]
@@ -25,8 +27,11 @@ impl EventHandler for Handler {}
 
 #[tokio::main]
 async fn main() {
+    pretty_env_logger::init();
+
     let framework = StandardFramework::new()
         .configure(|c| c.prefix("$")) // set the bot's prefix to "~"
+        .after(after_hook_logger)
         .group(&GENERAL_GROUP);
 
     // Login with a bot token from the environment
@@ -52,30 +57,12 @@ async fn main() {
 
 #[command]
 async fn item(ctx: &Context, msg: &Message) -> CommandResult {
-    // msg.reply(ctx, "Pong!").await?;
+    let mut args = Args::new(&msg.content, &[Delimiter::Single(' ')]);
 
-    msg.channel_id.send_message(ctx, |m| {
-        m.embed(|embed| {
-            embed
-                .title("Wowhead item lookup")
-                .description("Vexing Cane")
-        })
-    }).await?;
-
-
-    let id = 18082;
+    let id = args.advance().parse::<u32>()?;
 
     // msg.content
-    let url = format!("https://classic.wowhead.com/item={}", id);
-
-
-
-    // let xml = match reqwest::get(&url).await {
-    //     Ok(response) => {
-    //         response.
-    //     }
-    //     Err(_) => {}
-    // }
+    let url = format!("https://classic.wowhead.com/item={}&xml", id);
 
     let xml = reqwest::get(&url)
         .await?
@@ -84,16 +71,30 @@ async fn item(ctx: &Context, msg: &Message) -> CommandResult {
 
     let wowhead_response: wowhead::Wowhead = quick_xml::de::from_str(&xml)?;
 
+    debug!("Wowhead response: {:?}", wowhead_response.item.item_class);
 
     msg.channel_id.send_message(ctx, |m| {
         m.embed(|embed| {
             embed
-                .title("Wowhead item lookup")
-                .description(&wowhead_response.item.name)
+                .title(&wowhead_response.item.name)
+                .description("This item is awesome.")
         })
     }).await?;
-
 
     Ok(())
 }
 
+
+#[hook]
+async fn after_hook_logger(_: &Context, _: &Message, cmd_name: &str, error: Result<(), CommandError>) {
+    //  Print out an error if it happened
+    if let Err(why) = error {
+        error!("Error in command '{}': {:?}", cmd_name, why);
+
+        let mut error_chain = why.source();
+        while let Some(error_source) = error_chain {
+            error!("Because of: {:?}", error_source);
+            error_chain = error_source.source();
+        }
+    }
+}
