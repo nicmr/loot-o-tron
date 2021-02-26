@@ -1,4 +1,5 @@
-use serenity::{async_trait, builder::CreateEmbed, cache, framework::{self, standard::{Args, CommandError, Delimiter, macros::hook}}, http::Http, model::Permissions};
+use quick_xml::Reader;
+use serenity::{async_trait, builder::CreateEmbed, cache, framework::{self, standard::{Args, CommandError, Delimiter, macros::hook}}, http::Http, model::{Permissions, channel::EmbedField}};
 use serenity::client::{Client, Context, EventHandler};
 use serenity::model::channel::Message;
 use serenity::framework::standard::{
@@ -11,10 +12,10 @@ use serenity::framework::standard::{
 };
 use log::{error, debug};
 
-use std::{env};
+use std::{env, io::Read};
 
 mod wowhead;
-// mod error;
+mod error;
 
 #[group]
 #[commands(item)]
@@ -29,6 +30,7 @@ impl EventHandler for Handler {}
 async fn main() {
     pretty_env_logger::init();
 
+    // Initialize the serenity framework
     let framework = StandardFramework::new()
         .configure(|c| c.prefix("$")) // set the bot's prefix to "~"
         .after(after_hook_logger)
@@ -42,6 +44,7 @@ async fn main() {
         .await
         .expect("Error creating client");
 
+    // Create bot invite link with set permissions
     let permissions = Permissions::SEND_MESSAGES | Permissions::ADD_REACTIONS;
     let user = client.cache_and_http.cache.current_user().await;
     match user.invite_url(&client.cache_and_http.http, permissions).await {
@@ -57,13 +60,13 @@ async fn main() {
 
 #[command]
 async fn item(ctx: &Context, msg: &Message) -> CommandResult {
-    let mut args = Args::new(&msg.content, &[Delimiter::Single(' ')]);
 
+    // Parse the command arguments
+    let mut args = Args::new(&msg.content, &[Delimiter::Single(' ')]);
     let id = args.advance().parse::<u32>()?;
 
-    // msg.content
+    // Try to get the item with the specified id from wowhead
     let url = format!("https://classic.wowhead.com/item={}&xml", id);
-
     let xml = reqwest::get(&url)
         .await?
         .text()
@@ -71,20 +74,23 @@ async fn item(ctx: &Context, msg: &Message) -> CommandResult {
 
     let wowhead_response: wowhead::Wowhead = quick_xml::de::from_str(&xml)?;
 
-    debug!("Wowhead response: {:?}", wowhead_response.item.item_class);
+    
+    let attributes = wowhead::parse_html_tooltip(&wowhead_response.item.html_tooltip)?;
 
+    // debug!("Wowhead response: {:?}", wowhead_response.item.item_class);
     msg.channel_id.send_message(ctx, |m| {
         m.embed(|embed| {
             embed
                 .title(&wowhead_response.item.name)
                 .description("This item is awesome.")
+                .fields(attributes.iter().map(|(k,v)| (k, v, false)))
         })
     }).await?;
 
     Ok(())
 }
 
-
+/// Logs the result of each Command after it ist executed
 #[hook]
 async fn after_hook_logger(_: &Context, _: &Message, cmd_name: &str, error: Result<(), CommandError>) {
     //  Print out an error if it happened

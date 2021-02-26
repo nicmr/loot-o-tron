@@ -1,6 +1,3 @@
-use core::num::dec2flt::parse;
-use std::fmt;
-
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -9,5 +6,14 @@ pub enum ParseCommandError {
     WrongParameterCount{
         required: u32,
         actual: u32
+    },
+}
+
+#[derive(Debug, Error)]
+pub enum WowheadError {
+    #[error("Failed to decode tooltip.")]
+    TooltipParsingError{
+        #[from]
+        source: quick_xml::Error,
     },
 }
