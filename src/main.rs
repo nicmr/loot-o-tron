@@ -1,5 +1,4 @@
-use quick_xml::Reader;
-use serenity::{async_trait, builder::CreateEmbed, cache, framework::{self, standard::{Args, CommandError, Delimiter, macros::hook}}, http::Http, model::{Permissions, channel::EmbedField}};
+use serenity::{async_trait, framework::{standard::{Args, CommandError, Delimiter, macros::hook}}, model::{Permissions}};
 use serenity::client::{Client, Context, EventHandler};
 use serenity::model::channel::Message;
 use serenity::framework::standard::{
@@ -12,7 +11,7 @@ use serenity::framework::standard::{
 };
 use log::{error, debug};
 
-use std::{env, io::Read};
+use std::{env};
 
 mod wowhead;
 mod error;
@@ -58,13 +57,29 @@ async fn main() {
     }
 }
 
+/// Look up an item on wowhead.
+/// Syntax: `{prefix}item {id}`
 #[command]
 async fn item(ctx: &Context, msg: &Message) -> CommandResult {
 
+    
+    //replace(" ", "%20"); // required for safe urls? 
+
     // Parse the command arguments
     let mut args = Args::new(&msg.content, &[Delimiter::Single(' ')]);
-    let id = args.advance().parse::<u32>()?;
 
+    let id = match args.advance().remains() {
+        Some(remains) => {
+           Ok(remains)
+        },
+        None => {
+            Err(error::ParseCommandError::ParsingFailure{})
+        }
+    }?;
+
+
+
+    debug!("hopefully url safe id: {}", id);
     // Try to get the item with the specified id from wowhead
     let url = format!("https://classic.wowhead.com/item={}&xml", id);
     let xml = reqwest::get(&url)

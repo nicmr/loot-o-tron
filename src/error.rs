@@ -7,6 +7,9 @@ pub enum ParseCommandError {
         required: u32,
         actual: u32
     },
+    #[error("Parsing parameter failed.")]
+    ParsingFailure{  // TODO: improve error variant name
+    }
 }
 
 #[derive(Debug, Error)]

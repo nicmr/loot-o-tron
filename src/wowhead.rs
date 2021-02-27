@@ -113,6 +113,18 @@ pub fn parse_html_tooltip (html_tooltip: &str) -> Result<HashMap<String, String>
                         }
 
                     }
+                    "dps" => {
+                        match item_tooltip_reader.read_event(&mut buf) {
+                            Ok(Event::Text(t)) => {
+                                let ilvl = t.unescape_and_decode(&item_tooltip_reader)?;
+                                attributes.insert("DPS".to_owned(), ilvl);
+                            },
+                            Ok(_) => {
+                                error!("Encountered unexpected element after marker comment");
+                            },
+                            Err(_) => {}
+                        }
+                    }
                     _ => {
                         debug!("Ignoring comment: {:?}", comment)
                     }
